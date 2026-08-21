@@ -1,7 +1,15 @@
 import { neon } from '@neondatabase/serverless';
 
+export function getConnectionString() {
+  return process.env.POSTGRES_URL ?? process.env.DATABASE_URL;
+}
+
+export function hasDatabase() {
+  return Boolean(getConnectionString());
+}
+
 function createSql() {
-  const connectionString = process.env.POSTGRES_URL ?? process.env.DATABASE_URL;
+  const connectionString = getConnectionString();
   if (!connectionString) {
     throw new Error(
       'Missing POSTGRES_URL or DATABASE_URL. Set it in .env.local.',

@@ -1,9 +1,14 @@
 'use server';
 
 import { z } from 'zod';
-import { sql } from '@/app/lib/db';
+import { hasDatabase, sql } from '@/app/lib/db';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import {
+  createSampleInvoice,
+  deleteSampleInvoice,
+  updateSampleInvoice,
+} from '@/app/lib/sample-data';
 
 const FormSchema = z.object({
   id: z.string(),
@@ -73,10 +78,19 @@ export async function createInvoice(
     const date = new Date().toISOString().split('T')[0];
 
     try {
-        await sql`
-          INSERT INTO invoices (customer_id, amount, status, date)
-          VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
-        `;
+        if (hasDatabase()) {
+          await sql`
+            INSERT INTO invoices (customer_id, amount, status, date)
+            VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
+          `;
+        } else {
+          createSampleInvoice({
+            customerId,
+            amount: amountInCents,
+            status,
+            date,
+          });
+        }
       } catch (error) {
         return {
           message: 'Database Error: Failed to Create Invoice.',
@@ -109,22 +123,35 @@ export async function updateInvoice(
   const amountInCents = amount * 100;
  
   try {
-    await sql`
-      UPDATE invoices
-      SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
-      WHERE id = ${id}
-    `;
+    if (!hasDatabase() || id.startsWith('sample-invoice-')) {
+      if (!updateSampleInvoice(id, { customerId, amount: amountInCents, status })) {
+        return { message: 'Invoice not found.' };
+      }
+    } else {
+      await sql`
+        UPDATE invoices
+        SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
+        WHERE id = ${id}
+      `;
+    }
   } catch (error) {
     return { message: 'Database Error: Failed to Update Invoice.' };
   }
- 
+
   revalidatePath('/dashboard/invoices');
+  revalidatePath(`/dashboard/invoices/${id}/edit`);
   redirect('/dashboard/invoices');
 }
 
 export async function deleteInvoice(id: string) {
     try {
-        await sql`DELETE FROM invoices WHERE id = ${id}`;
+        if (!hasDatabase() || id.startsWith('sample-invoice-')) {
+          if (!deleteSampleInvoice(id)) {
+            throw new Error('Invoice not found.');
+          }
+        } else {
+          await sql`DELETE FROM invoices WHERE id = ${id}`;
+        }
         revalidatePath('/dashboard/invoices');
     } catch {
         throw new Error('Database Error: Failed to Delete Invoice.');
