@@ -1,7 +1,7 @@
 'use server';
 
 import { z } from 'zod';
-import { sql } from '@vercel/postgres';
+import { sql } from '@/app/lib/db';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
@@ -20,7 +20,6 @@ const FormSchema = z.object({
 const CreateInvoice = FormSchema.omit({ id: true, date: true });
 const UpdateInvoice = FormSchema.omit({ id: true, date: true });
 
-// This is temporary until @types/react-dom is updated
 export type State = {
     errors?: {
       customerId?: string[];
@@ -30,7 +29,10 @@ export type State = {
     message?: string | null;
 };
    
-export async function createInvoice(prevState: State, formData: FormData) {
+export async function createInvoice(
+  prevState: State,
+  formData: FormData,
+): Promise<State> {
     // const rawFormData = {
     //   customerId: formData.get('customerId'),
     //   amount: formData.get('amount'),
@@ -89,7 +91,7 @@ export async function updateInvoice(
   id: string,
   prevState: State,
   formData: FormData,
-) {
+): Promise<State> {
   const validatedFields = UpdateInvoice.safeParse({
     customerId: formData.get('customerId'),
     amount: formData.get('amount'),
@@ -121,12 +123,10 @@ export async function updateInvoice(
 }
 
 export async function deleteInvoice(id: string) {
-    // throw new Error('Failed to Delete Invoice');
     try {
         await sql`DELETE FROM invoices WHERE id = ${id}`;
         revalidatePath('/dashboard/invoices');
-        return { message: 'Deleted Invoice.' };
-    } catch (error) {
-        return { message: 'Database Error: Failed to Delete Invoice.' };
+    } catch {
+        throw new Error('Database Error: Failed to Delete Invoice.');
     }
 }
